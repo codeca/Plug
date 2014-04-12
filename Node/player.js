@@ -2,7 +2,6 @@
 
 var players = Object.create(null)
 
-
 var PLAYER_STATE = {
 	UNKNOWN:0, 
 	LOBBY:1,
@@ -10,7 +9,6 @@ var PLAYER_STATE = {
 	GAME:3,
 	CLOSING:4, //Preparing to close
 	CLOSED:5, //Finilize the connection close
-	LOST:6 //When resyncing
 }
 
 //Player constructor
@@ -21,10 +19,16 @@ function Player(conn){
 	this.data = null
 	this.state = PLAYER_STATE.UNKNOWN
 	this._lastSeenId = 0
+	this._lastSendedId = 0
+	this._timeOut = null
+	
+	this._lost = false
 	
 	this.game = null
 	//messages contains a raw message with format: 0+Id(2)+Type(2)+MessageSize(2)+Message
 	this._messages = []
+	//
+	this._gameStartId = undefined
 	
 	this._buffer = new Buffer(0)
 
@@ -33,19 +37,14 @@ function Player(conn){
 	
 }
 
-/*
-for (idToSend = id; idToSend<this._messages.length;idToSend++){
-					this._conn.write(this._messages[idToSend])
-				}			
-*/
-
+//Read messages in buffer until it dont have enough buffer to be read
 Player.prototype._processBuffer = function(){
 	var id, size, type, message
 	while(1){
 		//No messages
 		if (!this._buffer.length) break
 		
-		//Asking for resync
+		//Client asking for resync
 		if(this._buffer[0] == 1){
 			if (this._buffer.length < 3) break
 			id = this._buffer.readUInt16LE(1)
@@ -63,11 +62,14 @@ Player.prototype._processBuffer = function(){
 			
 			//Im lost, ask for resync
 			if (id > this._lastSeenId + 1){
-				this._processLostState(id)
+				if (!this._lost) 
+					this._processLostState(this._lastSeenId+1)
 			}
 			
 			//Process normal message
 			else if(id == this._lastSeenId + 1){
+				this._lost = false
+				clearTimeout(this._timeOut)
 				message = this._buffer.slice(7,7+size)
 				this._processMessage(type,message)
 				this._lastSeenId++
@@ -85,14 +87,33 @@ Player.prototype._processBuffer = function(){
 	}
 }
 
+//Resend old messages
 Player.prototype._processResync = function(id){
-	
+	var idToSend
+	for (idToSend = id; idToSend<this._messages.length;idToSend++){
+		this._conn.write(this._messages[idToSend])
+	}
 }
-Player.prototype._processLostState = function(id){
+
+//Ask for old messages
+Player.prototype._processLostState = function(idToAsk){
+	if (this.state == PLAYER_STATE.CLOSED || this.state == PLAYER_STATE.CLOSING) return
+	var that = this
+	clearTimeout(this._timeOut)
+	this._timeOut = setTimeout(function(){
+		if (!that._lost) return
+		that._processLostState(idToAsk)	
+	},5000)
+	this._lost = true
+	var message = new Buffer(3)
+	message[0] = 1
+	message.writeUInt16LE(idToAsk,1)
+	this._conn.write(message)
 }
+
 Player.prototype._processMessage = function(type,message){
+	//TODO: define types and messages
 }
-//#sadface
 
 function onreadable(player){
 	return function () {
