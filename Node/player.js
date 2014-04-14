@@ -1,5 +1,8 @@
 "use strict"
 
+var matchingRoom = require("./matchingRoom.js")
+var messageTypes = require("./messageTypes")
+
 var players = Object.create(null)
 
 var PLAYER_STATE = {
@@ -19,7 +22,6 @@ function Player(conn){
 	this.data = null
 	this.state = PLAYER_STATE.UNKNOWN
 	this._lastSeenId = 0
-	this._lastSendedId = 0
 	this._timeOut = null
 	
 	this._lost = false
@@ -27,7 +29,6 @@ function Player(conn){
 	this.game = null
 	//messages contains a raw message with format: 0+Id(2)+Type(2)+MessageSize(2)+Message
 	this._messages = []
-	//
 	this._gameStartId = undefined
 	
 	this._buffer = new Buffer(0)
@@ -35,6 +36,16 @@ function Player(conn){
 	this._conn = conn
 	this._conn.on("readable", onreadable(this))
 	
+}
+
+function onreadable(player){
+	return function () {
+		var buffer = player._conn.read()
+		if (buffer) {
+			player._buffer = Buffer.concat([player._buffer, buffer],player._buffer.length+buffer.length)
+			player._buffer._processBuffer()
+		}
+	}
 }
 
 //Read messages in buffer until it dont have enough buffer to be read
@@ -112,15 +123,71 @@ Player.prototype._processLostState = function(idToAsk){
 }
 
 Player.prototype._processMessage = function(type,message){
-	//TODO: define types and messages
+			
+	if (type == messageTypes.fromClient.IDENTIFICATION){
+		this._identify(message)
+	}
+	else if(type == messageTypes.fromClient.RANDOM_MATCH){
+		this._matching(message)		
+	}
+	else if(type == messageTypes.fromClient.CANCEL_MATCHING){
+		this._cancelMatching()
+	}
+	else if(type == messageTypes.fromClient.QUIT){
+		this._quit()
+	}
+	
 }
 
-function onreadable(player){
-	return function () {
-		var buffer = player._conn.read()
-		if (buffer) {
-			player._buffer = Buffer.concat([player._buffer, buffer],player._buffer.length+buffer.length)
-			player._buffer._processBuffer()
-		}
-	}
+Player.prototype._protocolError = function(message){
+	console.log(message)
+	console.trace()
+	this._conn.destroy()
 }
+
+//message = playerId
+Player.prototype._identify = function(message){
+	if (this.state != PLAYER_STATE.UNKNOWN || message.length == 16){
+		this._protocolError("Known player trying to identify again or lenght != 16")
+	}
+	this.state = PLAYER_STATE.LOBBY
+	this.playerId = message.toString("hex")
+	players[this.playerId] = this
+}
+
+//message = numberOfPlayers + playerName
+Player.prototype._matching = function(message){
+	var numberOfPlayers = message[0]
+	if (this.state != PLAYER_STATE.LOBBY)
+		this._protocolError("Player not in lobby asking for matching or asking for invalid number of players")
+	if (!matchingRoom.addPlayer(numberOfPlayers,this))
+		this._protocolError("The waiting room asked dont exist")
+	
+	this.state = PLAYER_STATE.MATCHING
+	this.name = message.slice(1).toString
+
+}
+
+//Use this function when server is sending a 0 prefixed message
+Player.prototype._sendStandartMessage = function(message){
+	this._messages.push(message)
+	this._conn.write(message)
+}
+
+Player.prototype._cancelMatching = function(){
+	
+	if (this.state != PLAYER_STATE.MATCHING){
+		this._protocolError("player trying to cancel matching, but he isnt machting")
+	}
+	if (!matchingRoom.removePlayer(this))
+		this._protocolError("the player is not in any waiting room")
+	
+	this.state = PLAYER_STATE.LOBBY
+}
+
+Player.prototype._quit = function(){
+	
+}
+
+
+
