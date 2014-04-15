@@ -5,6 +5,8 @@ var messageTypes = require("./messageTypes")
 
 var players = Object.create(null)
 
+module.exports = PLAYER_STATE
+
 var PLAYER_STATE = {
 	UNKNOWN:0, 
 	LOBBY:1,
@@ -43,7 +45,7 @@ function onreadable(player){
 		var buffer = player._conn.read()
 		if (buffer) {
 			player._buffer = Buffer.concat([player._buffer, buffer],player._buffer.length+buffer.length)
-			player._buffer._processBuffer()
+			player._processBuffer()
 		}
 	}
 }
@@ -133,8 +135,8 @@ Player.prototype._processMessage = function(type,message){
 	else if(type == messageTypes.fromClient.CANCEL_MATCHING){
 		this._cancelMatching()
 	}
-	else if(type == messageTypes.fromClient.QUIT){
-		this._quit()
+	else if(type >= 0){
+		this.game._broadcast(this,message)
 	}
 	
 }
@@ -147,7 +149,7 @@ Player.prototype._protocolError = function(message){
 
 //message = playerId
 Player.prototype._identify = function(message){
-	if (this.state != PLAYER_STATE.UNKNOWN || message.length == 16){
+	if (this.state != PLAYER_STATE.UNKNOWN || message.length != 16){
 		this._protocolError("Known player trying to identify again or lenght != 16")
 	}
 	this.state = PLAYER_STATE.LOBBY
@@ -159,25 +161,50 @@ Player.prototype._identify = function(message){
 Player.prototype._matching = function(message){
 	var numberOfPlayers = message[0]
 	if (this.state != PLAYER_STATE.LOBBY)
-		this._protocolError("Player not in lobby asking for matching or asking for invalid number of players")
+		this._protocolError("Player not in lobby asking for matching")
 	if (!matchingRoom.addPlayer(numberOfPlayers,this))
 		this._protocolError("The waiting room asked dont exist")
 	
 	this.state = PLAYER_STATE.MATCHING
-	this.name = message.slice(1).toString
+	this.name = message.slice(1).toString()
 
 }
 
+Player.prototype._startGame = function(game){
+	if (this.state != PLAYER_STATE.MATCHING){
+		this._protocolError("player not in matching trying to begin a game")
+	}
+	this.game = game
+	this.state = PLAYER_STATE.GAME
+	this._sendProtocolMessage(messageTypes.fromServer.GAME_STARTING,game._playersIdMessage)
+}
+
 //Use this function when server is sending a 0 prefixed message
-Player.prototype._sendStandartMessage = function(message){
-	this._messages.push(message)
-	this._conn.write(message)
+Player.prototype._sendProtocolMessage = function(type,message){
+	var answer = new Buffer(1+2+2+2+message.length)
+	answer[0] = 0
+	answer.writeUInt16LE(this._messages.length,1)
+	answer.writeInt16LE(type,3)
+	answer.writeUInt16LE(message.length,5)
+	message.copy(answer,7)
+	this._messages.push(answer)
+	this._conn.write(answer)
+}
+
+//Send a game message, message = type+size+message
+Player.prototype._sendGameMessage = function(message){
+	var answer = new Buffer(1+2+message.length)
+	answer[0] = 0
+	answer.writeUInt16LE(this._messages.length,1)
+	message.copy(answer,3)
+	this._messages.push(answer)
+	this._conn.write(answer)
 }
 
 Player.prototype._cancelMatching = function(){
 	
 	if (this.state != PLAYER_STATE.MATCHING){
-		this._protocolError("player trying to cancel matching, but he isnt machting")
+		this._protocolError("player trying to cancel matching, but he isnt matching")
 	}
 	if (!matchingRoom.removePlayer(this))
 		this._protocolError("the player is not in any waiting room")
@@ -185,9 +212,6 @@ Player.prototype._cancelMatching = function(){
 	this.state = PLAYER_STATE.LOBBY
 }
 
-Player.prototype._quit = function(){
-	
-}
 
-
+//TODO: onclose, change state and call Game.removePlayer is necessary
 

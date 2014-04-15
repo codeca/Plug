@@ -1,6 +1,7 @@
 "use strict"
 
 var messageTypes = require("./messageTypes.js")
+var game = require("./game.js")
 
 var waitingPlayers = {
 	"2": [],
@@ -32,10 +33,14 @@ waitingPlayers.removePlayer = function (player){
 //player is a Player instance
 //Return true if successfully added the player
 waitingPlayers.addPlayer = function (key,player){
+	var newGame
 	if (!waitingPlayers[key]) return false
 	waitingPlayers[key].push(player)
 	if (waitingPlayers[key].length == key){
-		//TODO: begin game
+		newGame = new game(waitingPlayers[key])
+		waitingPlayers[key].forEach(function(each){
+			each._startGame(newGame)
+		})
 	}
 	else{
 		sendUpdatePlayers(waitingPlayers[key])
@@ -45,12 +50,8 @@ waitingPlayers.addPlayer = function (key,player){
 var sendUpdatePlayers = function(players){
 	var answer
 	players.forEach(function(each){
-		answer = new Buffer(8)
-		answer[0] = 0
-		answer.writeUInt16LE(this._messages.length,1)
-		answer.writeInt16LE(messageTypes.fromServer.UPDATE_MATCHING,3)
-		answer.writeUInt16LE(1,5)
-		answer[7] = players.length
-		each._sendStandartMessage(answer)
+		answer = new Buffer(1)
+		answer[0] = players.length		
+		each._sendProtocolMessage(messageTypes.fromServer.UPDATE_MATCHING,answer)
 	})
 }
