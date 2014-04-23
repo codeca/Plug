@@ -38,8 +38,25 @@
 // x -> PLUG_STATE_CLOSED
 - (void)plug:(Plug*)plug didDisconnectClean:(BOOL)clean;
 
+// The connection lost its synchronization with the server
+// This means that the game should be completely reseted
+// All messages will be received again with plug:didReceiveGameMessage:withType:fromPlayer:
+// Only happens while PLUG_STATE_IN_GAME
+- (void)plugDidLoseSynchronization:(Plug*)plug;
+
+// The connection is synchronized again
+// Happens after plugDidLoseSynchronization:
+// Only happens while PLUG_STATE_IN_GAME
+- (void)plugDidRecoverSynchronization:(Plug*)plug;
+
 @optional
 
-// TODO: resyncs
+// Called when the connection is lost
+// The plug will try to reconnect maxReconnectAttempts
+// If all attempts fail, plug:didDisconnectClean: will be called
+- (void)plugDidLoseConnection:(Plug*)plug;
+
+// Called when the connection is up again
+- (void)plugDidRecoverConnection:(Plug*)plug;
 
 @end

@@ -20,14 +20,19 @@ typedef enum : NSUInteger {
 
 @interface Plug : NSObject
 
+// Current connection state
 @property (nonatomic, readonly) PlugState state;
 
-@property (nonatomic) id<PlugDelegate> delegate;
+// After the connection is lost, how many times to try to recover it
+// before assuming to be disconnected for ever
+@property (nonatomic) NSUInteger maxReconnectAttempts;
+
+@property (nonatomic, weak) id<PlugDelegate> delegate;
 
 // Start the plug with a connection to the given server address and port
 // The server will only match players with the same version
 // new state: PLUG_STATE_CONNECTING
-- (instancetype)initWithHost:(NSString*)host port:(int)port andAppVersion:(NSUInteger)version;
+- (instancetype)initWithHost:(NSString*)host port:(UInt32)port andAppVersion:(NSUInteger)version;
 
 // Start a random match with the given number of players
 // PLUG_STATE_LOBBY -> PLUG_STATE_RANDOM_MATCHING
