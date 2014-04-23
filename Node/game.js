@@ -6,7 +6,7 @@ var messageTypes = require("./messageTypes.js")
 module.exports = Game
 
 function Game(players){
-	this._playersIdMessage = new Buffer(16*4)
+	this._playersIdMessage = new Buffer(16*players.length)
 	var i
 	this._players = players
 	this._playersIdMessage.fill(0)
@@ -17,7 +17,7 @@ function Game(players){
 
 Game.prototype._broadcast = function(player,message){
 	var messageToBeSend
-	if (player.state != playerState.GAME){
+	if (player.state != playerState.playerState.GAME){
 		player._protocolError("player not in game trying to broadcast message")
 	}
 	messageToBeSend = new Buffer(message.length-3)

@@ -5,20 +5,22 @@ var messageTypes = require("./messageTypes")
 
 var players = Object.create(null)
 
-module.exports = PLAYER_STATE
+module.exports.playerState = PLAYER_STATE
+module.exports.newConnection = Player 
 
 var PLAYER_STATE = {
-	UNKNOWN:0, 
-	LOBBY:1,
-	MATCHING:2,
-	GAME:3,
+	UNKNOWN:0, //Player did not indentify itself
+	LOBBY:1, //Player is in lobby
+	MATCHING:2, //Player is looking for a game
+	GAME:3, //Player is in game
 	CLOSING:4, //Preparing to close
 	CLOSED:5, //Finilize the connection close
 }
 
 //Player constructor
+//Conn = net.socket
 function Player(conn){
-	
+	console.log("nova conexao")
 	this.name = ""
 	this.playerId = ""
 	this.data = null
@@ -40,11 +42,12 @@ function Player(conn){
 	
 }
 
+//Read the player connection and concat in player.buffer then call processBuffer
 function onreadable(player){
 	return function () {
 		var buffer = player._conn.read()
 		if (buffer) {
-			player._buffer = Buffer.concat([player._buffer, buffer],player._buffer.length+buffer.length)
+			player._buffer=Buffer.concat([player._buffer,buffer],player._buffer.length+buffer.length)
 			player._processBuffer()
 		}
 	}
@@ -100,7 +103,9 @@ Player.prototype._processBuffer = function(){
 	}
 }
 
-//Resend old messages
+//Resend old messages to player
+//id: resend messages from 'id' id
+//called by processBuffer
 Player.prototype._processResync = function(id){
 	var idToSend
 	for (idToSend = id; idToSend<this._messages.length;idToSend++){
@@ -109,6 +114,8 @@ Player.prototype._processResync = function(id){
 }
 
 //Ask for old messages
+//idToAsk: ask for messages from 'id' idToAsk
+//called by processBuffer
 Player.prototype._processLostState = function(idToAsk){
 	if (this.state == PLAYER_STATE.CLOSED || this.state == PLAYER_STATE.CLOSING) return
 	var that = this
@@ -124,6 +131,11 @@ Player.prototype._processLostState = function(idToAsk){
 	this._conn.write(message)
 }
 
+//Start the message processing
+//type = 2 bytes information about the message type
+//message = the message
+//called by processBuffer
+//can call identify, matching, game.broadcast
 Player.prototype._processMessage = function(type,message){
 			
 	if (type == messageTypes.fromClient.IDENTIFICATION){
@@ -141,23 +153,33 @@ Player.prototype._processMessage = function(type,message){
 	
 }
 
+//ProtocolError
+//Destroy the conection and log message
+//called whenever there is a state problem
 Player.prototype._protocolError = function(message){
 	console.log(message)
 	console.trace()
 	this._conn.destroy()
 }
 
-//message = playerId
+//process a indentify message
+//save playerId in player
+//message contains playerId
+//PlayerState.Unkown to PlayerState.Lobby
 Player.prototype._identify = function(message){
 	if (this.state != PLAYER_STATE.UNKNOWN || message.length != 16){
 		this._protocolError("Known player trying to identify again or lenght != 16")
+		
 	}
 	this.state = PLAYER_STATE.LOBBY
 	this.playerId = message.toString("hex")
 	players[this.playerId] = this
 }
 
+//Set the player name and add the player in a matchingRoom
 //message = numberOfPlayers + playerName
+//PlayerState.Lobby to PlayerState.Matching
+//call mathcingRoom.addPlayer
 Player.prototype._matching = function(message){
 	var numberOfPlayers = message[0]
 	if (this.state != PLAYER_STATE.LOBBY)
@@ -170,6 +192,10 @@ Player.prototype._matching = function(message){
 
 }
 
+//Player is starting a game
+//Set the game to player and send the players informations to this player
+//game = Game instance
+//playerState.Matching to playerState.Game
 Player.prototype._startGame = function(game){
 	if (this.state != PLAYER_STATE.MATCHING){
 		this._protocolError("player not in matching trying to begin a game")
@@ -179,7 +205,9 @@ Player.prototype._startGame = function(game){
 	this._sendProtocolMessage(messageTypes.fromServer.GAME_STARTING,game._playersIdMessage)
 }
 
-//Use this function when server is sending a 0 prefixed message
+//Send a standart message to this player (0+id+type+size+message)
+//type = one of messageTypeFromServer
+//message = message to be sent
 Player.prototype._sendProtocolMessage = function(type,message){
 	var answer = new Buffer(1+2+2+2+message.length)
 	answer[0] = 0
@@ -191,18 +219,23 @@ Player.prototype._sendProtocolMessage = function(type,message){
 	this._conn.write(answer)
 }
 
-//Send a game message, message = type+size+message
-Player.prototype._sendGameMessage = function(message){
+//Send a game message to this playe 
+//gameMessage = type+size+message
+//called by game.broadcast
+Player.prototype._sendGameMessage = function(gameMessage){
 	var answer = new Buffer(1+2+message.length)
 	answer[0] = 0
 	answer.writeUInt16LE(this._messages.length,1)
-	message.copy(answer,3)
+	gameMessage.copy(answer,3)
 	this._messages.push(answer)
 	this._conn.write(answer)
 }
 
+//Cancel the matching for player
+//Change state and remove player from matchingRoom
+//playerState.matching to playerState.lobby
+//call matchingRoom.removePlayer
 Player.prototype._cancelMatching = function(){
-	
 	if (this.state != PLAYER_STATE.MATCHING){
 		this._protocolError("player trying to cancel matching, but he isnt matching")
 	}

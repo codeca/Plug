@@ -3,7 +3,7 @@
 var MESSAGE_TYPE_FROM_CLIENT = {
 	IDENTIFICATION: -1, //message brings the playerId
 	RANDOM_MATCH: -2, //player is asking for random match
-	CANCEL_MATCHING: -3, //player dont want to match anymore
+	CANCEL_MATCHING: -3 //player dont want to match anymore
 }
 
 var MESSAGE_TYPE_FROM_SERVER = {
