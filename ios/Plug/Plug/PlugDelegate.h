@@ -17,10 +17,10 @@
 
 // Update info while in PLUG_STATE_RANDOM_MATCHING
 // goal is the target number of players
-- (void)plug:(Plug*)plug didReceiveRandomMatchUpdate:(NSUInteger)playersInRoom goal:(NSUInteger)goal;
+- (void)plug:(Plug*)plug didReceiveRandomMatchUpdate:(UInt8)playersInRoom goal:(UInt8)goal;
 
 // The matching is done and the game is starting
-// Each element of players is a dictionary with keys "name" and "id" (both strings)
+// Each element of players is a dictionary with keys "name" (NSString*) and "id" (NSData*)
 // The player order is the same for everybody in the room
 // PLUG_STATE_RANDOM_MATCHING -> PLUG_STATE_IN_GAME
 - (void)plug:(Plug*)plug didStartMatchWithPlayers:(NSArray*)players;

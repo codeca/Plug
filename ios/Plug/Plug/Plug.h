@@ -27,16 +27,19 @@ typedef enum : NSUInteger {
 // before assuming to be disconnected for ever
 @property (nonatomic) NSUInteger maxReconnectAttempts;
 
+@property (nonatomic, readonly) UInt16 version;
+
 @property (nonatomic, weak) id<PlugDelegate> delegate;
 
 // Start the plug with a connection to the given server address and port
 // The server will only match players with the same version
 // new state: PLUG_STATE_CONNECTING
-- (instancetype)initWithHost:(NSString*)host port:(UInt32)port andAppVersion:(NSUInteger)version;
+- (instancetype)initWithHost:(NSString*)host port:(UInt32)port andAppVersion:(UInt16)version;
 
 // Start a random match with the given number of players
+// name must be shorter than 256 bytes
 // PLUG_STATE_LOBBY -> PLUG_STATE_RANDOM_MATCHING
-- (void)startRandomMatchWithName:(NSString*)name andPlayers:(NSUInteger)players;
+- (void)startRandomMatchWithName:(NSString*)name andPlayers:(UInt8)players;
 
 // Stop the current matching process
 // PLUG_STATE_RANDOM_MATCHING -> PLUG_STATE_LOBBY
