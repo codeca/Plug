@@ -5,8 +5,8 @@ var messageTypes = require("./messageTypes")
 
 var players = Object.create(null)
 
+module.exports = Player
 module.exports.playerState = PLAYER_STATE
-module.exports.newConnection = Player 
 
 var PLAYER_STATE = {
 	UNKNOWN:0, //Player did not indentify itself
@@ -20,14 +20,14 @@ var PLAYER_STATE = {
 //Player constructor
 //Conn = net.socket
 function Player(conn){
-	console.log("nova conexao")
 	this.name = ""
 	this.playerId = ""
 	this.data = null
 	this.state = PLAYER_STATE.UNKNOWN
-	this._lastSeenId = 0
+	this._lastSeenId = -1
 	this._timeOut = null
 	
+	this._version = undefined
 	this._lost = false
 	
 	this.game = null
@@ -47,7 +47,7 @@ function onreadable(player){
 	return function () {
 		var buffer = player._conn.read()
 		if (buffer) {
-			player._buffer=Buffer.concat([player._buffer,buffer],player._buffer.length+buffer.length)
+			player._buffer = Buffer.concat([player._buffer, buffer], player._buffer.length + buffer.length)
 			player._processBuffer()
 		}
 	}
@@ -59,11 +59,10 @@ Player.prototype._processBuffer = function(){
 	while(1){
 		//No messages
 		if (!this._buffer.length) break
-		
 		//Client asking for resync
 		if(this._buffer[0] == 1){
 			if (this._buffer.length < 3) break
-			id = this._buffer.readUInt16LE(1)
+			id = this._buffer.readUInt16BE(1)
 			this._processResync(id)
 			this._buffer = this._buffer.slice(3)
 		}
@@ -71,9 +70,9 @@ Player.prototype._processBuffer = function(){
 		//Normal message
 		else if(this._buffer[0] == 0){
 			if (this._buffer.length < 7) break
-			id = this._buffer.readUInt16LE(1)
-			type = this._buffer.readInt16LE(3)
-			size = this._buffer.readUInt16LE(5)
+			id = this._buffer.readUInt16BE(1)
+			type = this._buffer.readInt16BE(3)
+			size = this._buffer.readUInt16BE(5)
 			if (this._buffer.length < 7+size) break
 			
 			//Im lost, ask for resync
@@ -127,7 +126,7 @@ Player.prototype._processLostState = function(idToAsk){
 	this._lost = true
 	var message = new Buffer(3)
 	message[0] = 1
-	message.writeUInt16LE(idToAsk,1)
+	message.writeUInt16BE(idToAsk,1)
 	this._conn.write(message)
 }
 
@@ -164,15 +163,19 @@ Player.prototype._protocolError = function(message){
 
 //process a indentify message
 //save playerId in player
-//message contains playerId
+//message contains playerId and playerVersion
 //PlayerState.Unkown to PlayerState.Lobby
 Player.prototype._identify = function(message){
-	if (this.state != PLAYER_STATE.UNKNOWN || message.length != 16){
-		this._protocolError("Known player trying to identify again or lenght != 16")
+	if (this.state != PLAYER_STATE.UNKNOWN || message.length != 18){
+		this._protocolError("Known player trying to identify again or lenght != 18")
 		
 	}
 	this.state = PLAYER_STATE.LOBBY
-	this.playerId = message.toString("hex")
+	this.playerId = message.slice(0,16).toString("hex")
+	this._version = message.readUInt16BE(16)
+	console.log('playerID: '+this.playerId)
+	console.log('version: '+this._version)
+	
 	players[this.playerId] = this
 }
 
@@ -211,9 +214,9 @@ Player.prototype._startGame = function(game){
 Player.prototype._sendProtocolMessage = function(type,message){
 	var answer = new Buffer(1+2+2+2+message.length)
 	answer[0] = 0
-	answer.writeUInt16LE(this._messages.length,1)
-	answer.writeInt16LE(type,3)
-	answer.writeUInt16LE(message.length,5)
+	answer.writeUInt16BE(this._messages.length,1)
+	answer.writeInt16BE(type,3)
+	answer.writeUInt16BE(message.length,5)
 	message.copy(answer,7)
 	this._messages.push(answer)
 	this._conn.write(answer)
@@ -223,9 +226,9 @@ Player.prototype._sendProtocolMessage = function(type,message){
 //gameMessage = type+size+message
 //called by game.broadcast
 Player.prototype._sendGameMessage = function(gameMessage){
-	var answer = new Buffer(1+2+message.length)
+	var answer = new Buffer(1+2+gameMessage.length)
 	answer[0] = 0
-	answer.writeUInt16LE(this._messages.length,1)
+	answer.writeUInt16BE(this._messages.length,1)
 	gameMessage.copy(answer,3)
 	this._messages.push(answer)
 	this._conn.write(answer)

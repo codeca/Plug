@@ -1,0 +1,23 @@
+{
+  "name": "plug",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha --recursive -R spec -b"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codeca/Plug.git"
+  },
+  "author": "Rodolfo Bitu <rodolfobitu@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/codeca/Plug/issues"
+  },
+  "homepage": "https://github.com/codeca/Plug",
+  "devDependencies": {
+    "mocha": "~1.18.2",
+    "should": "~3.3.1"
+  }
+}
