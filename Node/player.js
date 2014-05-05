@@ -208,7 +208,7 @@ Player.prototype._startGame = function(game){
 	this._sendProtocolMessage(messageTypes.fromServer.GAME_STARTING,game._playersIdMessage)
 }
 
-//Send a standart message to this player (0+id+type+size+message)
+//Send a standard message to this player (0+id+type+size+message)
 //type = one of messageTypeFromServer
 //message = message to be sent
 Player.prototype._sendProtocolMessage = function(type,message){
